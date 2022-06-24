@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import "./App.css";
 import firebase from "firebase/compat/app";
 import "firebase/compat/firestore";
-import "firebase/compat/auth"; 
+import "firebase/compat/auth";
 
 //firebase Hooks
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -25,7 +25,11 @@ function App() {
   const [user] = useAuthState(auth);
   return (
     <div className="App">
-      <header className="App-header"></header>
+      <header className="App-header">
+        <h1>Firebase Chat</h1>
+        <SignOut />
+      </header>
+      <SignOut />
       {/* If the user is signed in "user" will return an object, else null */}
       <section>{user ? <ChatRoom /> : <SignIn />} </section>
     </div>
@@ -37,14 +41,30 @@ function SignIn() {
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider);
   };
-  return <button>Sign in with Google</button>;
+
+  return (
+    <>
+      <button className="sign-in" onClick={signInWithGoogle}>
+        Sign in with Google
+      </button>
+      <p>
+        Do not violate the community guidelines or you will be banned for life!
+      </p>
+    </>
+  );
 }
 function SignOut() {
   return (
-    auth.currentUser && <button onClick={() => auth.signOut()}>Sign Out</button>
+    auth.currentUser && (
+      <button className="sign-out" onClick={() => auth.signOut()}>
+        Sign Out
+      </button>
+    )
   );
 }
 function ChatRoom() {
+  const dummy = useRef();
+
   //make a reference to a firestore collection
   const messagesRef = firestore.collection("messages");
 
@@ -55,18 +75,56 @@ function ChatRoom() {
   //returns an array of objects where each object is the chat message in the database
   const [messages] = useCollectionData(query, { idField: "id" });
 
+  const [formValue, setFormValue] = useState("");
+
+  const sendMessage = async (e) => {
+    if (formValue !== "") {
+      e.preventDefault();
+      const { uid, photoURL } = auth.currentUser;
+
+      //Adds message to database
+      await messagesRef.add({
+        text: formValue,
+        //gets timestamp from server
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        uid,
+        photoURL,
+      });
+      //once complete, returns the form value back to an empty string
+      setFormValue("");
+
+      dummy.current.scrollIntoView({ behavior: "smooth" });
+    }
+    e.preventDefault();
+  };
+
   return (
     <>
-      <div>
+      <main>
         {messages &&
           messages.map((msg) => <ChatMessage key={msg.id} message={msg} />)}
-      </div>
+        <div ref={dummy}></div>
+      </main>
+      <form onSubmit={sendMessage}>
+        <input
+          value={formValue}
+          onChange={(e) => setFormValue(e.target.value)}
+        />
+        <button type="submit" />
+      </form>
     </>
   );
 }
 
 function ChatMessage(props) {
-  const { text, uid } = props.message;
-  return <p>{text}</p>;
+  const { text, uid, photoURL } = props.message;
+  const messageClass = uid === auth.currentUser.uid ? "sent" : "received";
+
+  return (
+    <div className={`message ${messageClass}`}>
+      <img src={photoURL} alt="user Avatar" />
+      <p>{text}</p>;
+    </div>
+  );
 }
 export default App;
